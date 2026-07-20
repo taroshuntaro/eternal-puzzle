@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useReducer } from 'react';
 import {
-  gameReducer, initialState, type GameState, type Action,
+  gameReducer, initialState, toPlacements, type GameState, type Action,
 } from './gameReducer';
 import { loadProgress, saveProgress } from '../storage/collection';
 import { PIECE_IDS, type PieceId } from '../puzzle/pieces';
+import { isLegal } from '../puzzle/board';
 
 type GameContextValue = { state: GameState; dispatch: React.Dispatch<Action> };
 
@@ -28,9 +29,19 @@ function isValidGameState(saved: unknown): saved is GameState {
   return true;
 }
 
+// 復帰した盤が実際に合法(盤内・重なりなし)かを検証する。isLegal は対象ピース自身を除外して判定する。
+function isLegalBoard(state: GameState): boolean {
+  const placements = toPlacements(state);
+  for (const p of Object.values(placements)) {
+    if (p && !isLegal(placements, p)) return false;
+  }
+  return true;
+}
+
 function initFromStorage(): GameState {
   const saved = loadProgress();
-  return isValidGameState(saved) ? saved : initialState();
+  if (isValidGameState(saved) && isLegalBoard(saved as GameState)) return saved as GameState;
+  return initialState();
 }
 
 export function GameProvider({ children }: { children: React.ReactNode }) {

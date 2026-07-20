@@ -26,6 +26,7 @@ export function occupancy(placements: Placements): (PieceId | null)[] {
   for (const p of Object.values(placements)) {
     if (!p) continue;
     for (const cell of placedCells(p)) {
+      if (cell.r < 0 || cell.r >= ROWS || cell.c < 0 || cell.c >= COLS) continue; // 盤外は書き込まない(防御)
       grid[cell.r * COLS + cell.c] = p.pieceId;
     }
   }

@@ -73,4 +73,13 @@ describe('GameProvider', () => {
     render(<GameProvider><BoardCountProbe /></GameProvider>);
     expect(screen.getByText('onBoard:0')).toBeTruthy();
   });
+
+  it('falls back to initial state (no crash) when a saved orientation is out of range', () => {
+    const s = initialState();
+    // 向きインデックスが実在しない範囲外の値。placedCells が落ちる前に弾かれるべき。
+    s.pieces.F = { orientation: 50, position: { kind: 'board', anchor: { r: 0, c: 0 } } };
+    saveProgress(s);
+    expect(() => render(<GameProvider><PieceProbe /></GameProvider>)).not.toThrow();
+    expect(screen.getByText(/count:12/)).toBeTruthy();
+  });
 });

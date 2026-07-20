@@ -3,7 +3,7 @@ import {
   gameReducer, initialState, toPlacements, type GameState, type Action,
 } from './gameReducer';
 import { loadProgress, saveProgress } from '../storage/collection';
-import { PIECE_IDS, type PieceId } from '../puzzle/pieces';
+import { PIECE_IDS, getPiece, type PieceId } from '../puzzle/pieces';
 import { isLegal } from '../puzzle/board';
 
 type GameContextValue = { state: GameState; dispatch: React.Dispatch<Action> };
@@ -18,6 +18,11 @@ function isValidGameState(saved: unknown): saved is GameState {
   for (const id of PIECE_IDS) {
     const p = s.pieces[id];
     if (!p || typeof p.orientation !== 'number' || !p.position) return false;
+    // orientation は実在する向きを指すインデックスでなければならない。
+    // 範囲外だと placedCells が orientations[idx]=undefined に .map して落ちる。
+    if (!Number.isInteger(p.orientation)
+      || p.orientation < 0
+      || p.orientation >= getPiece(id).orientations.length) return false;
     if (p.position.kind === 'board') {
       const a = p.position.anchor;
       if (!a || typeof a.r !== 'number' || typeof a.c !== 'number') return false;

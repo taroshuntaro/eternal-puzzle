@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   loadCollection, addSolution, loadProgress, saveProgress, clearProgress,
+  isPersistenceAvailable,
 } from './collection';
 
 beforeEach(() => {
@@ -48,5 +49,19 @@ describe('collection storage', () => {
   it('returns null when stored progress is corrupt', () => {
     localStorage.setItem('eternal-puzzle:pentomino:progress', 'not json');
     expect(loadProgress()).toBeNull();
+  });
+});
+
+describe('persistence availability', () => {
+  it('is true when localStorage works', () => {
+    expect(isPersistenceAvailable()).toBe(true);
+  });
+
+  it('is false when setItem throws (e.g. private mode / quota)', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    expect(isPersistenceAvailable()).toBe(false);
+    spy.mockRestore();
   });
 });

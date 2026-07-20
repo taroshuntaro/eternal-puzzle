@@ -4,6 +4,7 @@ import { Board } from './components/Board';
 import { Tray } from './components/Tray';
 import { Controls } from './components/Controls';
 import { Collection } from './components/Collection';
+import { StorageNotice } from './components/StorageNotice';
 import { SolvedDialog } from './components/SolvedDialog';
 import { useDragController } from './hooks/usePointerDrag';
 import { PieceShape } from './components/PieceShape';
@@ -38,6 +39,7 @@ function Game() {
   return (
     <div className="app">
       <h1>ペントミノ・パズル</h1>
+      <StorageNotice />
       <Controls view={view} onToggleView={() => setView(view === 'play' ? 'collection' : 'play')} />
       {view === 'play' ? (
         <>

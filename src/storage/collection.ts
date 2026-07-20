@@ -73,3 +73,14 @@ export function clearProgress(): void {
     // 何もしない
   }
 }
+
+export function isPersistenceAvailable(): boolean {
+  const testKey = 'eternal-puzzle:__test__';
+  try {
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}

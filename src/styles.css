@@ -14,3 +14,8 @@ button { background: #3a3a42; color: #eee; border: 1px solid #555; padding: 6px 
   display: flex; align-items: center; justify-content: center; }
 .dialog { background: #26262b; padding: 24px; border-radius: 8px; text-align: center; }
 .dialog-actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+.thumb { display: grid; gap: 0; border: 1px solid #555; }
+.thumb-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.thumb-button { padding: 0; border: none; background: none; cursor: pointer; }
+.count { font-size: 20px; font-weight: bold; }
+.ghost { position: fixed; pointer-events: none; opacity: 0.7; z-index: 10; }

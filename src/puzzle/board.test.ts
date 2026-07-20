@@ -44,8 +44,8 @@ describe('board', () => {
 
   it('ignores the candidate own previous placement', () => {
     const placements: Placements = { I: iAtOrigin };
-    // 同じIを別の合法位置へ動かす: 自分自身とは衝突しない
-    const moved: Placement = { pieceId: 'I', orientation: 0, anchor: { r: 0, c: 1 } };
+    // 同じIを重複する位置へ動かす: 自分自身のセルと重なっても衝突しない
+    const moved: Placement = { pieceId: 'I', orientation: 0, anchor: { r: 1, c: 0 } };
     expect(isLegal(placements, moved)).toBe(true);
   });
 

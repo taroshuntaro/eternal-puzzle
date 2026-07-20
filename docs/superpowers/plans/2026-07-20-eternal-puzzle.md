@@ -1917,6 +1917,336 @@ git commit -m "feat: integrate collection view, controls, and drag ghost into ap
 
 ---
 
+### Task 13: ドロップ先セルのハイライト(緑=合法/赤=不可)
+
+**Files:**
+- Modify: `src/hooks/usePointerDrag.ts`(プレビュー算出を追加), `src/components/Board.tsx`(プレビュー描画), `src/App.tsx`(preview配線), `src/styles.css`
+- Test: 手動検証(ドラッグ描画のため)。合法判定はTask 3、座標計算はTask 7で担保済み。
+
+**Interfaces:**
+- Consumes: `placedCells`, `isLegal`, `ROWS`, `COLS`; `cellFromPoint`, `anchorFrom`
+- Produces:
+  - `type DropPreview = { cells: Cell[]; legal: boolean } | null`
+  - `useDragController` の戻り値に `preview: DropPreview` を追加。
+  - `Board` に `preview?: DropPreview` prop を追加し、該当セルに緑/赤の枠を描画。
+
+- [ ] **Step 1: usePointerDrag にプレビュー算出を追加(全文置換)**
+
+`src/hooks/usePointerDrag.ts`:
+
+```tsx
+import { useEffect, useState } from 'react';
+import { type Cell, type PieceId } from '../puzzle/pieces';
+import { cellFromPoint, anchorFrom } from '../puzzle/geometry';
+import { ROWS, COLS, isLegal, placedCells } from '../puzzle/board';
+import { useGame } from '../state/GameContext';
+import { toPlacements } from '../state/gameReducer';
+
+export type DragState =
+  | { id: PieceId; grabCell: Cell; x: number; y: number }
+  | null;
+
+export type DropPreview = { cells: Cell[]; legal: boolean } | null;
+
+function inBoardBounds(c: Cell): boolean {
+  return c.r >= 0 && c.r < ROWS && c.c >= 0 && c.c < COLS;
+}
+
+export function useDragController(
+  boardRef: React.RefObject<HTMLDivElement>,
+  cellSize: number,
+) {
+  const { state, dispatch } = useGame();
+  const [drag, setDrag] = useState<DragState>(null);
+
+  function startDrag(id: PieceId, grabCell: Cell, x: number, y: number) {
+    dispatch({ type: 'select', id });
+    setDrag({ id, grabCell, x, y });
+  }
+
+  // 現在のポインタ位置から、盤にスナップした候補セルと合法性を算出する
+  function candidateAt(x: number, y: number, d: NonNullable<DragState>) {
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const hovered = cellFromPoint(x, y, rect, cellSize);
+    if (!inBoardBounds(hovered)) return null;
+    const anchor = anchorFrom(hovered, d.grabCell);
+    const candidate = {
+      pieceId: d.id,
+      orientation: state.pieces[d.id].orientation,
+      anchor,
+    };
+    return { anchor, candidate };
+  }
+
+  let preview: DropPreview = null;
+  if (drag) {
+    const c = candidateAt(drag.x, drag.y, drag);
+    if (c) {
+      preview = {
+        cells: placedCells(c.candidate).filter(inBoardBounds),
+        legal: isLegal(toPlacements(state), c.candidate),
+      };
+    }
+  }
+
+  useEffect(() => {
+    if (!drag) return;
+    function onMove(e: PointerEvent) {
+      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
+    }
+    function onUp(e: PointerEvent) {
+      const c = candidateAt(e.clientX, e.clientY, drag!);
+      if (c && isLegal(toPlacements(state), c.candidate)) {
+        dispatch({ type: 'place', id: drag!.id, anchor: c.anchor });
+      } else if (state.pieces[drag!.id].position.kind === 'board') {
+        dispatch({ type: 'remove', id: drag!.id });
+      }
+      setDrag(null);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [drag, boardRef, cellSize, dispatch, state]);
+
+  return { drag, startDrag, preview };
+}
+```
+
+- [ ] **Step 2: Board にプレビュー描画を追加(該当箇所を差し替え)**
+
+`src/components/Board.tsx` を次の内容にする(propに`preview`追加、セルにクラス付与):
+
+```tsx
+import { useEffect } from 'react';
+import { useGame } from '../state/GameContext';
+import { toPlacements } from '../state/gameReducer';
+import { occupancy, COLS } from '../puzzle/board';
+import { getPiece } from '../puzzle/pieces';
+import { type DropPreview } from '../hooks/usePointerDrag';
+
+export function Board({
+  cellSize, boardRef, onCellPointerDown, preview,
+}: {
+  cellSize: number;
+  boardRef: React.RefObject<HTMLDivElement>;
+  onCellPointerDown?: (r: number, c: number, e: React.PointerEvent) => void;
+  preview?: DropPreview;
+}) {
+  const { state, dispatch } = useGame();
+  const grid = occupancy(toPlacements(state));
+  const previewCells = new Set((preview?.cells ?? []).map((c) => `${c.r},${c.c}`));
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'r' || e.key === 'R') dispatch({ type: 'rotate' });
+      if (e.key === 'f' || e.key === 'F') dispatch({ type: 'flip' });
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dispatch]);
+
+  return (
+    <div
+      ref={boardRef}
+      className="board"
+      style={{ gridTemplateColumns: `repeat(${COLS}, ${cellSize}px)` }}
+    >
+      {grid.map((pieceId, i) => {
+        const r = Math.floor(i / COLS);
+        const c = i % COLS;
+        const inPreview = previewCells.has(`${r},${c}`);
+        const previewClass = inPreview
+          ? preview!.legal ? ' preview-legal' : ' preview-illegal'
+          : '';
+        return (
+          <div
+            key={i}
+            className={`cell${previewClass}`}
+            data-testid="board-cell"
+            data-piece={pieceId ?? ''}
+            onPointerDown={(e) => onCellPointerDown?.(r, c, e)}
+            style={{
+              width: cellSize,
+              height: cellSize,
+              background: pieceId ? getPiece(pieceId).color : 'transparent',
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3: CSSを追加**
+
+`src/styles.css` に追記:
+
+```css
+.cell.preview-legal { box-shadow: inset 0 0 0 3px #2ecc71; }
+.cell.preview-illegal { box-shadow: inset 0 0 0 3px #e74c3c; }
+```
+
+- [ ] **Step 4: App で preview を配線**
+
+`src/App.tsx` の該当2箇所を変更:
+
+```tsx
+  const { drag, startDrag, preview } = useDragController(boardRef, CELL);
+```
+
+```tsx
+          <Board cellSize={CELL} boardRef={boardRef} onCellPointerDown={onCellPointerDown} preview={preview} />
+```
+
+- [ ] **Step 5: 型チェックと手動検証**
+
+Run: `npx tsc --noEmit && npm run dev`
+Expected: 型エラーなし。ドラッグ中、ドロップ先セルが合法なら緑・不可なら赤の枠で表示される。
+
+- [ ] **Step 6: コミット**
+
+```bash
+git add src/hooks/usePointerDrag.ts src/components/Board.tsx src/App.tsx src/styles.css
+git commit -m "feat: highlight drop target cells as legal or illegal"
+```
+
+---
+
+### Task 14: 保存失敗時の通知
+
+**Files:**
+- Create: `src/components/StorageNotice.tsx`
+- Modify: `src/storage/collection.ts`(可用性チェックを追加), `src/App.tsx`(通知を表示)
+- Test: `src/storage/collection.test.ts`(可用性チェックのテストを追記)
+
+**Interfaces:**
+- Consumes: なし
+- Produces:
+  - `function isPersistenceAvailable(): boolean` — localStorageへの試し書きが成功するか。
+  - `function StorageNotice(): JSX.Element | null` — 保存不可時のみ、閉じられるバナーを表示。
+
+- [ ] **Step 1: 失敗するテストを書く(collection.test.ts に追記)**
+
+まず先頭のimport行を更新する:
+
+```ts
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  loadCollection, addSolution, loadProgress, saveProgress, clearProgress,
+  isPersistenceAvailable,
+} from './collection';
+```
+
+続いてファイル末尾(最後の`});`の後)に追加:
+
+```ts
+describe('persistence availability', () => {
+  it('is true when localStorage works', () => {
+    expect(isPersistenceAvailable()).toBe(true);
+  });
+
+  it('is false when setItem throws (e.g. private mode / quota)', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    expect(isPersistenceAvailable()).toBe(false);
+    spy.mockRestore();
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認**
+
+Run: `npm test -- collection`
+Expected: FAIL(`isPersistenceAvailable`が未定義)
+
+- [ ] **Step 3: collection.ts に可用性チェックを実装**
+
+`src/storage/collection.ts` の末尾に追加:
+
+```ts
+export function isPersistenceAvailable(): boolean {
+  const testKey = 'eternal-puzzle:__test__';
+  try {
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+```
+
+- [ ] **Step 4: テストが通ることを確認**
+
+Run: `npm test -- collection`
+Expected: PASS(可用性テスト2件を含む全テスト)
+
+- [ ] **Step 5: 通知コンポーネントを実装**
+
+`src/components/StorageNotice.tsx`:
+
+```tsx
+import { useState } from 'react';
+import { isPersistenceAvailable } from '../storage/collection';
+
+export function StorageNotice() {
+  const [available] = useState(() => isPersistenceAvailable());
+  const [dismissed, setDismissed] = useState(false);
+  if (available || dismissed) return null;
+  return (
+    <div className="notice" role="status">
+      <span>
+        この環境では保存ができません(プライベートモードや容量超過の可能性)。
+        図鑑や進行状況はページを閉じると失われます。
+      </span>
+      <button onClick={() => setDismissed(true)}>閉じる</button>
+    </div>
+  );
+}
+```
+
+`src/styles.css` に追記:
+
+```css
+.notice { display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  background: #5a3a00; color: #ffd; padding: 10px 14px; border-radius: 6px; margin: 12px 0; }
+```
+
+- [ ] **Step 6: App に通知を組み込む**
+
+`src/App.tsx` の import に追加:
+
+```tsx
+import { StorageNotice } from './components/StorageNotice';
+```
+
+`<h1>ペントミノ・パズル</h1>` の直後に配置:
+
+```tsx
+      <h1>ペントミノ・パズル</h1>
+      <StorageNotice />
+```
+
+- [ ] **Step 7: 型チェックと全テスト**
+
+Run: `npm test && npx tsc --noEmit`
+Expected: 全テストPASS、型エラーなし
+
+- [ ] **Step 8: コミット**
+
+```bash
+git add src/storage/collection.ts src/storage/collection.test.ts src/components/StorageNotice.tsx src/App.tsx src/styles.css
+git commit -m "feat: notify when persistence is unavailable"
+```
+
+---
+
 ## 実装後の確認事項(全タスク完了時)
 
 - `npm test` 全通過、`npx tsc --noEmit` エラーなし。

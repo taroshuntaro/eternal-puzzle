@@ -59,13 +59,17 @@ export function loadProgress(): unknown | null {
 }
 
 export function saveProgress(state: unknown): void {
-  safeSet(PROGRESS_KEY, JSON.stringify(state));
+  try {
+    safeSet(PROGRESS_KEY, JSON.stringify(state));
+  } catch {
+    // 直列化できない値などはthrowせず黙って無視する
+  }
 }
 
 export function clearProgress(): void {
   try {
     localStorage.removeItem(PROGRESS_KEY);
   } catch {
-    // no-op
+    // 何もしない
   }
 }

@@ -38,4 +38,15 @@ describe('collection storage', () => {
     localStorage.setItem('eternal-puzzle:pentomino:collection', 'not json');
     expect(loadCollection()).toEqual([]);
   });
+
+  it('does not throw when saving a non-serializable value', () => {
+    const circular: any = {};
+    circular.self = circular;
+    expect(() => saveProgress(circular)).not.toThrow();
+  });
+
+  it('returns null when stored progress is corrupt', () => {
+    localStorage.setItem('eternal-puzzle:pentomino:progress', 'not json');
+    expect(loadProgress()).toBeNull();
+  });
 });

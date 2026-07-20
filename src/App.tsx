@@ -18,7 +18,7 @@ const CELL = 36;
 function Game() {
   const boardRef = useRef<HTMLDivElement>(null);
   const { state } = useGame();
-  const { drag, startDrag } = useDragController(boardRef, CELL);
+  const { drag, startDrag, preview } = useDragController(boardRef, CELL);
   const [view, setView] = useState<'play' | 'collection'>('play');
 
   function onGrab(id: PieceId, e: React.PointerEvent) {
@@ -41,7 +41,7 @@ function Game() {
       <Controls view={view} onToggleView={() => setView(view === 'play' ? 'collection' : 'play')} />
       {view === 'play' ? (
         <>
-          <Board cellSize={CELL} boardRef={boardRef} onCellPointerDown={onCellPointerDown} />
+          <Board cellSize={CELL} boardRef={boardRef} onCellPointerDown={onCellPointerDown} preview={preview} />
           <Tray onGrab={onGrab} />
           <SolvedDialog />
         </>

@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
 import { type Cell, type PieceId } from '../puzzle/pieces';
 import { cellFromPoint, anchorFrom } from '../puzzle/geometry';
-import { ROWS, COLS, isLegal } from '../puzzle/board';
+import { ROWS, COLS, isLegal, placedCells } from '../puzzle/board';
 import { useGame } from '../state/GameContext';
 import { toPlacements } from '../state/gameReducer';
 
 export type DragState =
   | { id: PieceId; grabCell: Cell; x: number; y: number }
   | null;
+
+export type DropPreview = { cells: Cell[]; legal: boolean } | null;
+
+function inBoardBounds(c: Cell): boolean {
+  return c.r >= 0 && c.r < ROWS && c.c >= 0 && c.c < COLS;
+}
 
 export function useDragController(
   boardRef: React.RefObject<HTMLDivElement | null>,
@@ -21,37 +27,58 @@ export function useDragController(
     setDrag({ id, grabCell, x, y });
   }
 
+  // 現在のポインタ位置から、盤にスナップした候補セルと合法性を算出する
+  function candidateAt(x: number, y: number, d: NonNullable<DragState>) {
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const hovered = cellFromPoint(x, y, rect, cellSize);
+    if (!inBoardBounds(hovered)) return null;
+    const anchor = anchorFrom(hovered, d.grabCell);
+    const candidate = {
+      pieceId: d.id,
+      orientation: state.pieces[d.id].orientation,
+      anchor,
+    };
+    return { anchor, candidate };
+  }
+
+  let preview: DropPreview = null;
+  if (drag) {
+    const c = candidateAt(drag.x, drag.y, drag);
+    if (c) {
+      preview = {
+        cells: placedCells(c.candidate).filter(inBoardBounds),
+        legal: isLegal(toPlacements(state), c.candidate),
+      };
+    }
+  }
+
   useEffect(() => {
     if (!drag) return;
     function onMove(e: PointerEvent) {
       setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
     }
     function onUp(e: PointerEvent) {
-      const rect = boardRef.current?.getBoundingClientRect();
-      if (rect) {
-        const hovered = cellFromPoint(e.clientX, e.clientY, rect, cellSize);
-        const anchor = anchorFrom(hovered, drag!.grabCell);
-        const inside = hovered.r >= 0 && hovered.r < ROWS && hovered.c >= 0 && hovered.c < COLS;
-        const candidate = {
-          pieceId: drag!.id,
-          orientation: state.pieces[drag!.id].orientation,
-          anchor,
-        };
-        if (inside && isLegal(toPlacements(state), candidate)) {
-          dispatch({ type: 'place', id: drag!.id, anchor });
-        } else if (state.pieces[drag!.id].position.kind === 'board') {
-          dispatch({ type: 'remove', id: drag!.id });
-        }
+      const c = candidateAt(e.clientX, e.clientY, drag!);
+      if (c && isLegal(toPlacements(state), c.candidate)) {
+        dispatch({ type: 'place', id: drag!.id, anchor: c.anchor });
+      } else if (state.pieces[drag!.id].position.kind === 'board') {
+        dispatch({ type: 'remove', id: drag!.id });
       }
+      setDrag(null);
+    }
+    function onCancel() {
       setDrag(null);
     }
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
     };
   }, [drag, boardRef, cellSize, dispatch, state]);
 
-  return { drag, startDrag };
+  return { drag, startDrag, preview };
 }

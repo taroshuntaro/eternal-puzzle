@@ -1,4 +1,5 @@
 import { type Cell, type PieceId, getPiece } from './pieces';
+export type { Cell } from './pieces';
 
 export const ROWS = 6;
 export const COLS = 10;

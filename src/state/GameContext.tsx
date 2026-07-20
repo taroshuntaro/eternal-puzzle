@@ -40,7 +40,7 @@ function isLegalBoard(state: GameState): boolean {
 
 function initFromStorage(): GameState {
   const saved = loadProgress();
-  if (isValidGameState(saved) && isLegalBoard(saved as GameState)) return saved as GameState;
+  if (isValidGameState(saved) && isLegalBoard(saved)) return saved;
   return initialState();
 }
 

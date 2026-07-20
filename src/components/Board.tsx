@@ -16,6 +16,7 @@ export function Board({
   const { state, dispatch } = useGame();
   const grid = occupancy(toPlacements(state));
   const previewCells = new Set((preview?.cells ?? []).map((c) => `${c.r},${c.c}`));
+  const previewClass = preview ? (preview.legal ? 'preview-legal' : 'preview-illegal') : '';
 
   // キーボード: R=回転, F=反転
   useEffect(() => {
@@ -37,13 +38,10 @@ export function Board({
         const r = Math.floor(i / COLS);
         const c = i % COLS;
         const inPreview = previewCells.has(`${r},${c}`);
-        const previewClass = inPreview
-          ? preview!.legal ? ' preview-legal' : ' preview-illegal'
-          : '';
         return (
           <div
             key={i}
-            className={`cell${previewClass}`}
+            className={`cell${inPreview ? ' ' + previewClass : ''}`}
             data-testid="board-cell"
             data-piece={pieceId ?? ''}
             onPointerDown={(e) => onCellPointerDown?.(r, c, e)}

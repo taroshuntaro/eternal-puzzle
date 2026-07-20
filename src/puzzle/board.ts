@@ -17,8 +17,12 @@ export function placedCells(p: Placement): Cell[] {
   return orientation.map((c) => ({ r: c.r + p.anchor.r, c: c.c + p.anchor.c }));
 }
 
+export function cellInBounds(c: Cell): boolean {
+  return c.r >= 0 && c.r < ROWS && c.c >= 0 && c.c < COLS;
+}
+
 export function inBounds(cells: Cell[]): boolean {
-  return cells.every((c) => c.r >= 0 && c.r < ROWS && c.c >= 0 && c.c < COLS);
+  return cells.every(cellInBounds);
 }
 
 export function occupancy(placements: Placements): (PieceId | null)[] {
@@ -26,7 +30,7 @@ export function occupancy(placements: Placements): (PieceId | null)[] {
   for (const p of Object.values(placements)) {
     if (!p) continue;
     for (const cell of placedCells(p)) {
-      if (cell.r < 0 || cell.r >= ROWS || cell.c < 0 || cell.c >= COLS) continue; // 盤外は書き込まない(防御)
+      if (!cellInBounds(cell)) continue; // 盤外は書き込まない(防御)
       grid[cell.r * COLS + cell.c] = p.pieceId;
     }
   }

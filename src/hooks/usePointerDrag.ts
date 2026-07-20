@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { type Cell, type PieceId } from '../puzzle/pieces';
 import { cellFromPoint, anchorFrom } from '../puzzle/geometry';
-import { ROWS, COLS, isLegal, placedCells } from '../puzzle/board';
+import { isLegal, placedCells, cellInBounds } from '../puzzle/board';
 import { useGame } from '../state/GameContext';
 import { toPlacements } from '../state/gameReducer';
 
@@ -10,10 +10,6 @@ export type DragState =
   | null;
 
 export type DropPreview = { cells: Cell[]; legal: boolean } | null;
-
-function inBoardBounds(c: Cell): boolean {
-  return c.r >= 0 && c.r < ROWS && c.c >= 0 && c.c < COLS;
-}
 
 export function useDragController(
   boardRef: React.RefObject<HTMLDivElement | null>,
@@ -27,28 +23,26 @@ export function useDragController(
     setDrag({ id, grabCell, x, y });
   }
 
-  // 現在のポインタ位置から、盤にスナップした候補セルと合法性を算出する
+  // 現在のポインタ位置から、盤にスナップした配置候補を算出する
   function candidateAt(x: number, y: number, d: NonNullable<DragState>) {
     const rect = boardRef.current?.getBoundingClientRect();
     if (!rect) return null;
     const hovered = cellFromPoint(x, y, rect, cellSize);
-    if (!inBoardBounds(hovered)) return null;
-    const anchor = anchorFrom(hovered, d.grabCell);
-    const candidate = {
+    if (!cellInBounds(hovered)) return null;
+    return {
       pieceId: d.id,
       orientation: state.pieces[d.id].orientation,
-      anchor,
+      anchor: anchorFrom(hovered, d.grabCell),
     };
-    return { anchor, candidate };
   }
 
   let preview: DropPreview = null;
   if (drag) {
-    const c = candidateAt(drag.x, drag.y, drag);
-    if (c) {
+    const candidate = candidateAt(drag.x, drag.y, drag);
+    if (candidate) {
       preview = {
-        cells: placedCells(c.candidate).filter(inBoardBounds),
-        legal: isLegal(toPlacements(state), c.candidate),
+        cells: placedCells(candidate).filter(cellInBounds),
+        legal: isLegal(toPlacements(state), candidate),
       };
     }
   }
@@ -59,9 +53,9 @@ export function useDragController(
       setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
     }
     function onUp(e: PointerEvent) {
-      const c = candidateAt(e.clientX, e.clientY, drag!);
-      if (c && isLegal(toPlacements(state), c.candidate)) {
-        dispatch({ type: 'place', id: drag!.id, anchor: c.anchor });
+      const candidate = candidateAt(e.clientX, e.clientY, drag!);
+      if (candidate && isLegal(toPlacements(state), candidate)) {
+        dispatch({ type: 'place', id: drag!.id, anchor: candidate.anchor });
       } else if (state.pieces[drag!.id].position.kind === 'board') {
         dispatch({ type: 'remove', id: drag!.id });
       }
